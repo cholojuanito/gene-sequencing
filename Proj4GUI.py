@@ -90,11 +90,8 @@ class Proj4GUI( QMainWindow ):
 					self.table.item(i,j).setText(' ')
 
 	def cellClicked(self, i, j):
-		print('Cell {},{} clicked!'.format(i,j))
-		print('lbls: {} and {}'.format(self.seqs[i][1],self.seqs[j][1]))
 
 		if self.processed_results and j >= i:
-			print('in if')
 			self.seq1n_lbl.setText( 'Label {}: '.format(i+1) )
 			self.seq1c_lbl.setText( 'Sequence {}: '.format(i+1) )
 			self.seq2c_lbl.setText( 'Sequence {}: '.format(j+1) )
