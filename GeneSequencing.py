@@ -24,7 +24,7 @@ SUB = 1
 UP = 'u'
 LEFT = 'l'
 DIAGONAL = 'd'
-FINISHED = 'f'
+START = 's'
 
 
 class GeneSequencing:
@@ -46,11 +46,8 @@ class GeneSequencing:
         for i in range(len(sequences)):
             jresults = []
             subSeq1 = sequences[i][:self.MaxCharactersToAlign]
-            lenSubSeq1 = len(subSeq1)
-
             for j in range(len(sequences)):
                 subSeq2 = sequences[j][:self.MaxCharactersToAlign]
-                lenSubSeq2 = len(subSeq2)
 
                 if(j < i):
                     s = {}
@@ -62,35 +59,10 @@ class GeneSequencing:
                     alignment2 = 'as-123--  DEBUG:(seq{}, {} chars,align_len={}{})'.format(j+1,
                                                                                            len(sequences[j]), align_length, ',BANDED' if banded else '')
 
-                    editScores = np.zeros((lenSubSeq1 + 1, lenSubSeq2 + 1))
-                    backTrace = np.ndarray(
-                        (lenSubSeq1 + 1,  lenSubSeq2 + 1), dtype=tuple)
-                    backTrace.fill(tuple([FINISHED, math.inf]))
-
-                    for x in range(1,  lenSubSeq1 + 1):
-                        editScores[x, 0] = x * INDEL
-                        backTrace[x, 0] = tuple([UP,  x * INDEL])
-
-                    for y in range(1, lenSubSeq2 + 1):
-                        editScores[0, y] = y * INDEL
-                        backTrace[0, y] = tuple([LEFT, x * INDEL])
-
-                    for row in range(1, lenSubSeq1 + 1):
-                        for col in range(1, lenSubSeq2 + 1):
-                            leftVal = (editScores[row - 1, col] + INDEL)
-                            upperVal = (editScores[row, col - 1] + INDEL)
-                            diagonalVal = (editScores[row - 1, col - 1] +
-                                           self.difference(subSeq1, subSeq2, row - 1, col - 1))
-                            minVal = min(leftVal, upperVal, diagonalVal)
-                            editScores[row, col] = minVal
-                            if (minVal == diagonalVal):
-                                backTrace[row, col] = tuple([DIAGONAL, minVal])
-                            elif (minVal == upperVal):
-                                backTrace[row, col] = tuple([UP, minVal])
-                            else:
-                                backTrace[row, col] = tuple([LEFT, minVal])
-
-                    score = editScores[lenSubSeq1, lenSubSeq2]
+                    if (self.banded):
+                        self.alignBanded(subSeq1, subSeq2)
+                    else:
+                        score = self.alignUnrestricted(subSeq1, subSeq2)
 
                     s = {'align_cost': score, 'seqi_first100': alignment1,
                          'seqj_first100': alignment2}
@@ -100,6 +72,42 @@ class GeneSequencing:
                 jresults.append(s)
             results.append(jresults)
         return results
+
+    def alignUnrestricted(self, subSeq1, subSeq2):
+        lenSubSeq1 = len(subSeq1)
+        lenSubSeq2 = len(subSeq2)
+        self.editScores = np.zeros((lenSubSeq1 + 1, lenSubSeq2 + 1))
+        self.backTrace = np.ndarray(
+            (lenSubSeq1 + 1,  lenSubSeq2 + 1), dtype=object)
+        self.backTrace.fill(START)
+
+        for x in range(1,  lenSubSeq1 + 1):
+            self.editScores[x, 0] = x * INDEL
+            self.backTrace[x, 0] = UP
+
+        for y in range(1, lenSubSeq2 + 1):
+            self.editScores[0, y] = y * INDEL
+            self.backTrace[0, y] = LEFT
+
+        for row in range(1, lenSubSeq1 + 1):
+            for col in range(1, lenSubSeq2 + 1):
+                leftVal = (self.editScores[row - 1, col] + INDEL)
+                upperVal = (self.editScores[row, col - 1] + INDEL)
+                diagonalVal = (self.editScores[row - 1, col - 1] +
+                               self.difference(subSeq1, subSeq2, row - 1, col - 1))
+                minVal = min(leftVal, upperVal, diagonalVal)
+                self.editScores[row, col] = minVal
+                if (minVal == diagonalVal):
+                    self.backTrace[row, col] = DIAGONAL
+                elif (minVal == upperVal):
+                    self.backTrace[row, col] = UP
+                else:
+                    self.backTrace[row, col] = LEFT
+
+        return self.editScores[lenSubSeq1, lenSubSeq2]
+
+    def alignBanded(self, subSeq1, subSeq2):
+        pass
 
     def difference(self, subSeq1, subSeq2, idx1, idx2):
         if (subSeq1[idx1] == subSeq2[idx2]):
