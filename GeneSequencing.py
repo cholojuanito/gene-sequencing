@@ -38,6 +38,7 @@ class GeneSequencing:
 # you whether you should compute a banded alignment or full alignment, and _align_length_ tells you
 # how many base pairs to use in computing the alignment
 
+
     def align(self, sequences, table, banded, align_length):
         self.banded = banded
         self.MaxCharactersToAlign = align_length
@@ -58,11 +59,15 @@ class GeneSequencing:
                                                                                            len(sequences[i]), align_length, ',BANDED' if banded else '')
                     alignment2 = 'as-123--  DEBUG:(seq{}, {} chars,align_len={}{})'.format(j+1,
                                                                                            len(sequences[j]), align_length, ',BANDED' if banded else '')
-
-                    if (self.banded):
-                        self.alignBanded(subSeq1, subSeq2)
+                    # If the sub sequences are the same then we have a full match
+                    if (subSeq2 == subSeq1):
+                        score = len(subSeq2) * MATCH
                     else:
-                        score = self.alignUnrestricted(subSeq1, subSeq2)
+                        # Otherwise we need to find the optimal alignment
+                        if (self.banded):
+                            self.alignBanded(subSeq1, subSeq2)
+                        else:
+                            score = self.alignUnrestricted(subSeq1, subSeq2)
 
                     s = {'align_cost': score, 'seqi_first100': alignment1,
                          'seqj_first100': alignment2}
@@ -76,18 +81,8 @@ class GeneSequencing:
     def alignUnrestricted(self, subSeq1, subSeq2):
         lenSubSeq1 = len(subSeq1)
         lenSubSeq2 = len(subSeq2)
-        self.editScores = np.zeros((lenSubSeq1 + 1, lenSubSeq2 + 1))
-        self.backTrace = np.ndarray(
-            (lenSubSeq1 + 1,  lenSubSeq2 + 1), dtype=object)
-        self.backTrace.fill(START)
 
-        for x in range(1,  lenSubSeq1 + 1):
-            self.editScores[x, 0] = x * INDEL
-            self.backTrace[x, 0] = UP
-
-        for y in range(1, lenSubSeq2 + 1):
-            self.editScores[0, y] = y * INDEL
-            self.backTrace[0, y] = LEFT
+        self.initAlignmentArrays(lenSubSeq1, lenSubSeq2)
 
         for row in range(1, lenSubSeq1 + 1):
             for col in range(1, lenSubSeq2 + 1):
@@ -105,6 +100,25 @@ class GeneSequencing:
                     self.backTrace[row, col] = LEFT
 
         return self.editScores[lenSubSeq1, lenSubSeq2]
+
+    def initAlignmentArrays(self, lenSubSeq1, lenSubSeq2):
+        if(self.banded):
+            pass
+        else:
+            self.editScores = np.empty((lenSubSeq1 + 1, lenSubSeq2 + 1))
+            self.backTrace = np.ndarray(
+                (lenSubSeq1 + 1,  lenSubSeq2 + 1), dtype=object)
+
+            self.editScores[0, 0] = 0
+            self.backTrace[0, 0] = START
+
+            for x in range(1,  lenSubSeq1 + 1):
+                self.editScores[x, 0] = x * INDEL
+                self.backTrace[x, 0] = UP
+
+            for y in range(1, lenSubSeq2 + 1):
+                self.editScores[0, y] = y * INDEL
+                self.backTrace[0, y] = LEFT
 
     def alignBanded(self, subSeq1, subSeq2):
         pass
