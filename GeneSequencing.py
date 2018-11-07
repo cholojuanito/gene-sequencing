@@ -38,7 +38,6 @@ class GeneSequencing:
 # you whether you should compute a banded alignment or full alignment, and _align_length_ tells you
 # how many base pairs to use in computing the alignment
 
-
     def align(self, sequences, table, banded, align_length):
         self.banded = banded
         self.MaxCharactersToAlign = align_length
@@ -53,21 +52,25 @@ class GeneSequencing:
                 if(j < i):
                     s = {}
                 else:
-                    ###################################################################################################
-                    # your code should replace these three statements and populate the three variables: score, alignment1 and alignment2
-                    alignment1 = 'abc-easy  DEBUG:(seq{}, {} chars,align_len={}{})'.format(i+1,
-                                                                                           len(sequences[i]), align_length, ',BANDED' if banded else '')
-                    alignment2 = 'as-123--  DEBUG:(seq{}, {} chars,align_len={}{})'.format(j+1,
-                                                                                           len(sequences[j]), align_length, ',BANDED' if banded else '')
                     # If the sub sequences are the same then we have a full match
                     if (subSeq2 == subSeq1):
                         score = len(subSeq2) * MATCH
+                        alignment1 = subSeq1.format(
+                            i+1, len(sequences[i]), align_length, ',BANDED' if banded else '')
+                        alignment2 = subSeq2.format(
+                            ',BANDED' if banded else '')
                     else:
                         # Otherwise we need to find the optimal alignment
                         if (self.banded):
                             self.alignBanded(subSeq1, subSeq2)
                         else:
                             score = self.alignUnrestricted(subSeq1, subSeq2)
+                        # Backtrace for the best edit
+                        alignments = self.findOptimalPath(subSeq1, subSeq2)
+                        alignment2 = alignments[1].format(
+                            ',BANDED' if banded else '')
+                        alignment1 = alignments[0].format(
+                            i+1, len(sequences[i]), align_length, ',BANDED' if banded else '')
 
                     s = {'align_cost': score, 'seqi_first100': alignment1,
                          'seqj_first100': alignment2}
@@ -86,20 +89,26 @@ class GeneSequencing:
 
         for row in range(1, lenSubSeq1 + 1):
             for col in range(1, lenSubSeq2 + 1):
+                if (subSeq1[row - 1] == subSeq2[col - 1]):
+                    difference = MATCH
+                else:
+                    difference = SUB
                 leftVal = (self.editScores[row - 1, col] + INDEL)
                 upperVal = (self.editScores[row, col - 1] + INDEL)
-                diagonalVal = (self.editScores[row - 1, col - 1] +
-                               self.difference(subSeq1, subSeq2, row - 1, col - 1))
+                diagonalVal = (self.editScores[row - 1, col - 1] + difference)
                 minVal = min(leftVal, upperVal, diagonalVal)
                 self.editScores[row, col] = minVal
                 if (minVal == diagonalVal):
-                    self.backTrace[row, col] = DIAGONAL
+                    self.backTrace[row, col] = [DIAGONAL, difference]
                 elif (minVal == upperVal):
-                    self.backTrace[row, col] = UP
+                    self.backTrace[row, col] = [LEFT, INDEL]
                 else:
-                    self.backTrace[row, col] = LEFT
+                    self.backTrace[row, col] = [UP, INDEL]
 
         return self.editScores[lenSubSeq1, lenSubSeq2]
+
+    def alignBanded(self, subSeq1, subSeq2):
+        pass
 
     def initAlignmentArrays(self, lenSubSeq1, lenSubSeq2):
         if(self.banded):
@@ -110,18 +119,41 @@ class GeneSequencing:
                 (lenSubSeq1 + 1,  lenSubSeq2 + 1), dtype=object)
 
             self.editScores[0, 0] = 0
-            self.backTrace[0, 0] = START
+            self.backTrace[0, 0] = [START, 0]
 
             for x in range(1,  lenSubSeq1 + 1):
                 self.editScores[x, 0] = x * INDEL
-                self.backTrace[x, 0] = UP
+                self.backTrace[x, 0] = [UP, INDEL]
 
             for y in range(1, lenSubSeq2 + 1):
                 self.editScores[0, y] = y * INDEL
-                self.backTrace[0, y] = LEFT
+                self.backTrace[0, y] = [LEFT, INDEL]
 
-    def alignBanded(self, subSeq1, subSeq2):
-        pass
+    def findOptimalPath(self, subSeq1, subSeq2):
+        lenSubSeq1 = len(subSeq1)
+        lenSubSeq2 = len(subSeq2)
+        i = lenSubSeq1
+        j = lenSubSeq2
+        backwardStr1 = ''
+        backwardStr2 = ''
+        while(self.backTrace[i, j][0] != START):
+            if(self.backTrace[i, j][0] == DIAGONAL):
+                i -= 1
+                j -= 1
+                backwardStr1 += subSeq1[i]
+                backwardStr2 += subSeq2[j]
+
+            elif(self.backTrace[i, j][0] == LEFT):
+                j -= 1
+                backwardStr2 += subSeq2[j]
+                backwardStr1 += '-'
+
+            elif(self.backTrace[i, j][0] == UP):
+                i -= 1
+                backwardStr1 += subSeq1[i]
+                backwardStr2 += '-'
+
+        return [backwardStr1[::-1], backwardStr2[::-1]]
 
     def difference(self, subSeq1, subSeq2, idx1, idx2):
         if (subSeq1[idx1] == subSeq2[idx2]):
