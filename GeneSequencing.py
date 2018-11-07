@@ -38,6 +38,7 @@ class GeneSequencing:
 # you whether you should compute a banded alignment or full alignment, and _align_length_ tells you
 # how many base pairs to use in computing the alignment
 
+
     def align(self, sequences, table, banded, align_length):
         self.banded = banded
         self.MaxCharactersToAlign = align_length
@@ -93,17 +94,17 @@ class GeneSequencing:
                     difference = MATCH
                 else:
                     difference = SUB
-                leftVal = (self.editScores[row - 1, col] + INDEL)
-                upperVal = (self.editScores[row, col - 1] + INDEL)
+                upperVal = (self.editScores[row - 1, col] + INDEL)
+                leftVal = (self.editScores[row, col - 1] + INDEL)
                 diagonalVal = (self.editScores[row - 1, col - 1] + difference)
                 minVal = min(leftVal, upperVal, diagonalVal)
                 self.editScores[row, col] = minVal
-                if (minVal == diagonalVal):
-                    self.backTrace[row, col] = [DIAGONAL, difference]
+                if (minVal == leftVal):
+                    self.backTrace[row, col] = [UP, INDEL]
                 elif (minVal == upperVal):
                     self.backTrace[row, col] = [LEFT, INDEL]
                 else:
-                    self.backTrace[row, col] = [UP, INDEL]
+                    self.backTrace[row, col] = [DIAGONAL, difference]
 
         return self.editScores[lenSubSeq1, lenSubSeq2]
 
