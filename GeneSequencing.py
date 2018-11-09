@@ -38,7 +38,6 @@ class GeneSequencing:
 # you whether you should compute a banded alignment or full alignment, and _align_length_ tells you
 # how many base pairs to use in computing the alignment
 
-
     def align(self, sequences, table, banded, align_length):
         self.banded = banded
         self.MaxCharactersToAlign = align_length
@@ -63,15 +62,19 @@ class GeneSequencing:
                     else:
                         # Otherwise we need to find the optimal alignment
                         if (self.banded):
-                            self.alignBanded(subSeq1, subSeq2)
+                            score = self.alignBanded(subSeq1, subSeq2)
                         else:
                             score = self.alignUnrestricted(subSeq1, subSeq2)
                         # Backtrace for the best edit
-                        alignments = self.findOptimalPath(subSeq1, subSeq2)
-                        alignment2 = alignments[1].format(
-                            ',BANDED' if banded else '')
-                        alignment1 = alignments[0].format(
-                            i+1, len(sequences[i]), align_length, ',BANDED' if banded else '')
+                        if (score != math.inf):
+                            alignments = self.findOptimalPath(subSeq1, subSeq2)
+                            alignment2 = alignments[1].format(
+                                ',BANDED' if banded else '')
+                            alignment1 = alignments[0].format(
+                                i+1, len(sequences[i]), align_length, ',BANDED' if banded else '')
+                        else:
+                            alignment1 = 'No Alignment Possible'
+                            alignment2 = 'No Alignment Possible'
 
                     s = {'align_cost': score, 'seqi_first100': alignment1,
                          'seqj_first100': alignment2}
@@ -99,21 +102,143 @@ class GeneSequencing:
                 diagonalVal = (self.editScores[row - 1, col - 1] + difference)
                 minVal = min(leftVal, upperVal, diagonalVal)
                 self.editScores[row, col] = minVal
-                if (minVal == leftVal):
-                    self.backTrace[row, col] = [UP, INDEL]
-                elif (minVal == upperVal):
-                    self.backTrace[row, col] = [LEFT, INDEL]
-                else:
+                if (minVal == diagonalVal):
                     self.backTrace[row, col] = [DIAGONAL, difference]
+                elif (minVal == upperVal):
+                    self.backTrace[row, col] = [UP, INDEL]
+                else:
+                    self.backTrace[row, col] = [LEFT, INDEL]
 
         return self.editScores[lenSubSeq1, lenSubSeq2]
 
     def alignBanded(self, subSeq1, subSeq2):
-        pass
+        lenSubSeq1 = len(subSeq1)
+        lenSubSeq2 = len(subSeq2)
+
+        lenDiff = abs(lenSubSeq1 - lenSubSeq2)
+        # Not possible. Don't even bother trying
+        if(lenDiff > MAXINDELS):
+            return math.inf
+
+        self.initAlignmentArrays(lenSubSeq1, lenSubSeq2)
+
+        # Offset for fiding the correct index to use while in the middle section of the 'band'
+        middleSectStartIdx = MAXINDELS + 1
+        middleSectEndIdx = (lenSubSeq1 + 1) - lenDiff - MAXINDELS
+
+        for row in range(1, MAXINDELS + 1):
+            for col in range(1, (2 * MAXINDELS) + 1):
+                # We are in either the beginning of the 'band', indexing is like unrestricted
+                if(row == 1 and col > middleSectStartIdx):
+                    break
+                if(row == 2 and col > middleSectStartIdx + 1):
+                    break
+
+                if (subSeq1[row - 1] == subSeq2[col - 1]):
+                    difference = MATCH
+                else:
+                    difference = SUB
+                upperVal = (self.editScores[row - 1, col] + INDEL)
+                leftVal = (self.editScores[row, col - 1] + INDEL)
+                diagonalVal = (
+                    self.editScores[row - 1, col - 1] + difference)
+                minVal = min(leftVal, upperVal, diagonalVal)
+                self.editScores[row, col] = minVal
+                if (minVal == diagonalVal):
+                    self.backTrace[row, col] = [DIAGONAL, difference]
+                elif (minVal == upperVal):
+                    self.backTrace[row, col] = [UP, INDEL]
+                else:
+                    self.backTrace[row, col] = [LEFT, INDEL]
+
+        # We are in the middle section of the 'band' and the indexing gets a little strange
+        strOffset = 0
+        for row in range(middleSectStartIdx, middleSectEndIdx + 1):
+            for col in range(0, (2 * MAXINDELS) + 1):
+                if (subSeq1[row - 1] == subSeq2[col + strOffset]):
+                    difference = MATCH
+                else:
+                    difference = SUB
+                diagonalVal = (self.editScores[row - 1, col] + difference)
+                upperVal = math.inf
+                leftVal = math.inf
+                # Avoid index out of bounds
+                if(col != 2 * MAXINDELS):
+                    upperVal = (self.editScores[row - 1, col + 1] + INDEL)
+                # Avoid index out of bounds
+                if(col + 1 >= strOffset):
+                    leftVal = (self.editScores[row, col - 1] + INDEL)
+                minVal = min(leftVal, upperVal, diagonalVal)
+                self.editScores[row, col] = minVal
+                if (minVal == diagonalVal):
+                    self.backTrace[row, col] = [DIAGONAL, difference]
+                elif (minVal == upperVal):
+                    self.backTrace[row, col] = [UP, INDEL]
+                else:
+                    self.backTrace[row, col] = [LEFT, INDEL]
+            # Increment the index offset to make sure we are comparing the correct subsection of subSeq2
+            strOffset += 1
+
+        # for col in range(0, (2 * MAXINDELS) + 1):
+        #     if (subSeq1[middleSectEndIdx] == subSeq2[col + strOffset]):
+        #         difference = MATCH
+        #     else:
+        #         difference = SUB
+        #     upperVal = (self.editScores[middleSectEndIdx + 1, col] + INDEL)
+        #     leftVal = (self.editScores[middleSectEndIdx + 1, col - 1] + INDEL)
+        #     diagonalVal = (
+        #         self.editScores[middleSectEndIdx + 1, col - 1] + difference)
+        #     minVal = min(leftVal, upperVal, diagonalVal)
+        #     self.editScores[middleSectEndIdx + 1, col] = minVal
+        #     if (minVal == diagonalVal):
+        #         self.backTrace[middleSectEndIdx +
+        #                        1, col] = [DIAGONAL, difference]
+        #     elif (minVal == upperVal):
+        #         self.backTrace[middleSectEndIdx + 1, col] = [UP, INDEL]
+        #     else:
+        #         self.backTrace[middleSectEndIdx + 1, col] = [LEFT, INDEL]
+
+                # We are in the last section
+                # Use this column counter as another offset for keeping the infs in the editScores table
+        colCounter = 1
+        for row in range(middleSectEndIdx + 2, lenSubSeq1 + 1):
+            for col in range(colCounter, (2 * MAXINDELS) + 1):
+                if (subSeq1[row - 1] == subSeq2[col + strOffset]):
+                    difference = MATCH
+                else:
+                    difference = SUB
+                upperVal = (self.editScores[row - 1, col] + INDEL)
+                leftVal = (self.editScores[row, col - 1] + INDEL)
+                diagonalVal = (
+                    self.editScores[row - 1, col - 1] + difference)
+                minVal = min(leftVal, upperVal, diagonalVal)
+                self.editScores[row, col] = minVal
+                if (minVal == diagonalVal):
+                    self.backTrace[row, col] = [DIAGONAL, difference]
+                elif (minVal == upperVal):
+                    self.backTrace[row, col] = [UP, INDEL]
+                else:
+                    self.backTrace[row, col] = [LEFT, INDEL]
+            colCounter += 1
+
+        return self.editScores[lenSubSeq1, 2 * MAXINDELS]
 
     def initAlignmentArrays(self, lenSubSeq1, lenSubSeq2):
         if(self.banded):
-            pass
+            self.editScores = np.full(
+                (lenSubSeq1 + 1, (2 * MAXINDELS) + 1), math.inf)
+            self.backTrace = np.ndarray(
+                (lenSubSeq1 + 1, (2 * MAXINDELS) + 1), dtype=object)
+            self.editScores[0, 0] = 0
+            self.backTrace[0, 0] = [START, 0]
+
+            for x in range(1,  MAXINDELS + 1):
+                self.editScores[x, 0] = x * INDEL
+                self.backTrace[x, 0] = [UP, INDEL]
+
+            for y in range(1,  MAXINDELS + 1):
+                self.editScores[0, y] = y * INDEL
+                self.backTrace[0, y] = [LEFT, INDEL]
         else:
             self.editScores = np.empty((lenSubSeq1 + 1, lenSubSeq2 + 1))
             self.backTrace = np.ndarray(
